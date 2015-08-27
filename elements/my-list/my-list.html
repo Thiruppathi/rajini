@@ -1,0 +1,165 @@
+<!--
+@license
+Copyright (c) 2015 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/pouchdb-element/pouchdb-element.html">
+<link rel="import" href="../../bower_components/rxjs-element/rxjs-element.html">
+
+
+<dom-module id="my-list">
+  <style>
+    :host {
+      display: block;
+      font-family: 'Roboto', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+    paper-material.jokes {
+      margin: 1em;
+      padding: 1em;
+      width: 300px;
+      height: auto;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    paper-textarea {
+      width: 80%;
+      margin:1em;
+    }
+
+    .submitArea {
+      width: 100%;
+      padding: 2em;
+    }
+
+    paper-button[raised].colorful {
+      background: #FFA000;
+      color: #fff;
+    }
+
+
+  </style>
+  <template>
+
+    <paper-material class="submitArea animated bounceInUp">
+      <paper-textarea id="jokeTextArea" label="Submit Your Joke"></paper-textarea>
+      <paper-button raised class="colorful" on-tap="submitJoke">Submit</paper-button>
+    </paper-material>
+
+
+    <div class="layout horizontal wrap">
+      <template is="dom-repeat" items="{{items}}">
+        <paper-material class="jokes animated bounceInUp">
+          <span class="paper-font-body1">{{item}}</span>
+      </paper-material>
+      </template>
+</div>
+  </template>
+
+  <script>
+    (function() {
+      Polymer({
+        is: 'my-list',
+        properties: {
+          items: {
+            type: Array,
+            notify: true,
+            reflectToAttribute: true,
+            value: function() {
+              var db = this.getDb();
+              var dbJokes = ['1', '2', '3'];
+              db.allDocs({
+                include_docs: true,
+                attachments: true
+              }, function(err, response) {
+                if (err) {
+                  return console.log(err);
+                }
+                // handle result
+                var rows = response.rows;
+                dbJokes = rows.map(function(joke) {
+                  return (joke.doc.joke);
+                });
+                document.querySelector('my-list').setAttribute('items', JSON.stringify(dbJokes));
+              });
+              return dbJokes;
+            }
+          }
+        },
+        ready: function() {
+          //this.items = this.jokes();
+        //  this.rxjsDbJokes();
+        },
+        getAllDocs: function() {
+          var db = this.getDb();
+          var responsePromise = db.allDocs({
+            include_docs: true,
+            attachments: true
+          }, function(err, response) {
+            if (err) {
+              return console.log(err);
+            }
+            // handle result
+          });
+
+          return responsePromise;
+        },
+        rxjsDbJokes: function() {
+          console.log('Calling RxJS');
+          var source1 = Rx.Observable.fromPromise(this.getAllDocs());
+
+          var subscription1 = source1.subscribe(
+            function(x) {
+              console.log('Next: %s', x);
+              var rows = x.rows;
+              dbJokes = rows.map(function(joke) {
+                return (joke.doc.joke);
+              });
+              document.querySelector('my-list').setAttribute('items', JSON.stringify(dbJokes));
+              this.items=dbJokes;
+            },
+            function(err) {
+              console.log('Error: %s', err);
+            },
+            function() {
+              console.log('Completed');
+            });
+        },
+        getDb: function() {
+          var db = new PouchDB('chuck_jokes');
+          var remoteDb = 'https://thiru.cloudant.com/chuck_jokes';
+          db.sync(remoteDb);
+          return db;
+        },
+        submitJoke: function() {
+          console.log('Submitting Joke');
+          var submittedJoke = jokeTextArea.value;
+
+          var newJoke = {
+              _id: new Date().toISOString(),
+              joke: submittedJoke
+          };
+
+          var db = this.getDb();
+          db.put(newJoke).then(function() {
+              console.log('Successfully posted joke!' + submittedJoke);
+          }).catch(function(error) {
+              console.log('Must be a Bad Joke');
+          });
+
+          db.sync('https://thiru.cloudant.com/chuck_jokes');
+          jokeTextArea.value = "";
+          this.rxjsDbJokes();
+
+
+        }
+      });
+    })();
+  </script>
+
+</dom-module>
